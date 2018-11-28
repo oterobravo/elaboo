@@ -1,10 +1,10 @@
-#Treefuns: functions for working with trees
+#Treefuns
+#Functions for working with trees
 #includes the majority rule plus consensus algorithm
 ##from Jansson, et al., 2013. https://arxiv.org/pdf/1307.7821.pdf
 #Alejandro Otero Bravo
-#May 14, 2018
 #v0.1 
-#from mrc13
+#Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
 from Bio import Phylo
 from Bio.Phylo.Consensus import *

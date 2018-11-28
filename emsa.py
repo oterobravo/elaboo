@@ -1,11 +1,10 @@
-#E MultipleSequence Alignment
+#Elaboorate MultipleSequence Alignment
 #Alejandro Otero Bravo
-#May 14, 2018
 #v0.1
 #Separates taxa in an alignment based on multiple alignment metrics
 #Including distance from an outgroup, base composition, and kmer frequency.
 #The main point will be to separate taxa that are likely affected by LBA.
-#Bug fixes: changes the alphabet function to not iterate once per record. 
+#Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
 from Bio import Phylo
 from Bio import Align

@@ -1,12 +1,8 @@
-#Elaboo
-#Enhanced alignment, leave-all-but-one-out algorithm
+# ELABOORATE
+#Extract & Leave-All-But-One-Out Reconstruction.
 #Alejandro Otero Bravo
-#May 16, 2018
 #v0.1
-#For two lists of taxa, create a base tree from one list and add taxa one by one from
-#the second list
-#Updated to work with version 6 of aln_decompose
-#fixing bugs from 5
+#Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
 from iter_funcs import *
 import argparse
