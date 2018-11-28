@@ -1,7 +1,7 @@
 # ELABOORATE
 #Extract & Leave-All-But-One-Out Reconstruction.
 #Alejandro Otero Bravo
-#v0.1
+#v0.2
 #Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
 from iter_funcs import *
@@ -34,6 +34,8 @@ parser.add_argument("-y", "--algorithm", type = str, default = 'a', help = '''Wh
 	e: Split and generate trees from a separate array.
 	f: Generate trees for my list of problem taxa.
 	g: Generate consensus tree from trees provided in file resulting_trees.tre''')
+parser.add_argument("--kmer", type = int, default = 2, help = "Length of k-mer to use in sequence.")
+parser.add_argument("--histbreaks", type = int, default = 20, help = "Number of histogram breaks for the distribution file.")
 parser.add_argument("-l", "--log_file", type = str, default = 'treeiter.log', help = "File to save the log.")
 parser.add_argument("-w", "--log_level", type = int, default = 3, help = "logging level between 0 (none) and 3")
 parser.add_argument("-e", "--epa_algorithm", action = 'store_true', help = "Use RAxML-EPA for faster placement.")
@@ -93,7 +95,7 @@ else:
 
 if (CALCULATE & (args.taxa_stats_file is None)):
 	logging.info("Begin CALCULATE")
-	taxa_stats = calculate(alignment_prepared, array_file = "alignment_stats.txt", kmer_num = 2, outgroup = alignment_prepared.is_named(outgroup))
+	taxa_stats = calculate(alignment_prepared, array_file = "alignment_stats.txt", kmer_num = args.kmer, outgroup = alignment_prepared.is_named(outgroup))
 	logging.info("CALCULATE finalized.")
 
 if SPLIT:
@@ -104,12 +106,12 @@ if SPLIT:
 			taxa_stats = np.genfromtxt(args.taxa_stats_file)
 		except:
 			raise Exception("Statistics for each taxon were not calculated and no file was given. Add a file using -s or set CALCULATE to True.")
-	problem_taxa, PCA_results = split_taxa(alignment_prepared, taxa_stats, outgroup, threshold = args.pca_threshold, hist_file = args.distribution )
+	problem_taxa, PCA_results = split_taxa(alignment_prepared, taxa_stats, outgroup, threshold = args.pca_threshold, hist_file = args.distribution, breaks = args.histbreaks )
 	logging.info("SPLIT finalized.")
 
 if TREE_BUILD:
 	logging.info("Begin TREE_BUILD")
-	temporal_dir = ''.join(random.choice(string.ascii_lowercase) for _ in range(8))
+	temporal_dir = '.elaboo_temp'
 	os.mkdir(temporal_dir)
 	logging.info('Created temporal directory with name %s' % temporal_dir)
 	try:
@@ -127,7 +129,8 @@ if TREE_BUILD:
 	if args.epa_algorithm:
 		CONSOLIDATE = False
 		tree_placement(alignment_prepared, problem_taxa, model = args.model, temporal_dir = temporal_dir, keep = args.keep_alignments)
-		logging.info("EPA Finalized. Files saved to %s" % temporal_dir)
+		logging.info("EPA Finalized.")
+		os.rmdir(temporal_dir)
 	else:
 		logging.info('Generating alignments leaving all but one taxa out.')
 		laboo_alignments = generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
@@ -137,8 +140,11 @@ if TREE_BUILD:
 		if args.keep_alignments == False:
 			for f in glob.glob(temporal_dir+"/*"):
 				os.remove(f)
-			os.rmdir(temporal_dir)
 			logging.info('Temporary alignments removed.')
+		else:
+			for f in glob.glob(temporal_dir+"/*"):
+				os.rename(f, f.replace(temporal_dir+"/", "", 1))
+		os.rmdir(temporal_dir)
 	logging.info("TREE_BUILD finalized.")
 
 if CONSOLIDATE:

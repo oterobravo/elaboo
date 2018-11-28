@@ -22,7 +22,7 @@ def calculate(alignment, array_file, kmer_num, outgroup):
 	np.savetxt(array_file, taxa_stats)
 	return(taxa_stats)
 
-def split_taxa(alignment, statistics_array, outgroup, threshold = 0, hist_file = None):
+def split_taxa(alignment, statistics_array, outgroup, threshold = 0, hist_file = None, breaks = 20):
 	PCA_results = alignment.get_pca(array = statistics_array)
 	logging.info("PCA values:\n%s" % "\n\t".join([str(round(PCA_results[0][x], 5))+": "+str(x) for x in PCA_results[0]]))
 	logging.info("Proportion of variance explained by PCA %s" % PCA_results[1])
@@ -33,7 +33,7 @@ def split_taxa(alignment, statistics_array, outgroup, threshold = 0, hist_file =
 	if hist_file is not None:
 		logging.info("Saving histogram to file %s" % hist_file)
 		logging.disable(logging.CRITICAL) ##TO STOP MATPLOTLIB LOGGING
-		hs.hist([PCA_results[0][x] for x in PCA_results[0]], 20)
+		hs.hist([PCA_results[0][x] for x in PCA_results[0]], breaks)
 		hs.axvline(x = threshold, color = 'b')
 		hs.savefig(hist_file)
 		logging.disable(logging.NOTSET) ##TO ENABLE LOGGING AGAIN
@@ -118,7 +118,7 @@ def consolidate_trees(treesfile, outgroup):
 def tree_placement(alignment, prob_taxa, model = None, reps = 5, keep = False, temporal_dir = None):
 	logging.info("Begin Placement Method")
 	if temporal_dir is None:
-		temporal_dir = ''.join(random.choice(string.ascii_lowercase) for _ in range(8))
+		temporal_dir = '.elaboo_epa_temp'
 		os.mkdir(temporal_dir)
 		logging.info('Created temporal directory with name %s' % temporal_dir)
 	namepath = os.getcwd()+'/'+temporal_dir+'/'
@@ -150,4 +150,7 @@ def tree_placement(alignment, prob_taxa, model = None, reps = 5, keep = False, t
 	raxml_epa_obj = RaxmlCommandline(sequences = namepath+"clean.phy", model = evo_model, name="EPA.tre", working_dir = namepath, algorithm = 'v', starting_tree = namepath+"RAxML_bestTree.basetree")
 	logging.info("RAxML called as: %s" % raxml_epa_obj)
 	raxml_epa_obj()
+	for f in glob.glob(temporal_dir+"/RAxML_*EPA*"):
+		os.rename(f, f.replace(temporal_dir+'/', "", 1)) #Move files up.
+	os.rmdir(temporal_dir)
 	logging.info("RAxML run finalized")
