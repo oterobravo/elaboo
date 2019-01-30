@@ -1,6 +1,6 @@
 #Functions for the iteration of the algorithm
 #Alejandro Otero Bravo
-#v0.1
+#v0.3
 #Modules are defined here.
 
 #Disclaimer: The following is a preliminary version that has not been thoroughly tested.
@@ -8,6 +8,7 @@
 from treefuns import *
 from emsa import *
 from Bio.Phylo.Applications import RaxmlCommandline
+from Bio.Phylo.Applications import _Fasttree
 import glob
 import os
 import random
@@ -18,13 +19,18 @@ import matplotlib.pyplot as hs
 def calculate(alignment, array_file, kmer_num, outgroup):
 	taxa_stats = alignment.stat_array(kmer = kmer_num, outgroup = outgroup)
 	np.set_printoptions(threshold=1000000, linewidth=1000, precision = 4)
-	logging.info("Statistic array: \n\t%s" % "\n\t".join([", ".join([str(y) for y in x]) for x in taxa_stats.tolist()]))
+	#logging.info("Statistic array: \n\t%s" % "\n\t".join([", ".join([str(y) for y in x]) for x in taxa_stats.tolist()]))
+	taxa_stats_list = taxa_stats.tolist()
+	logging.info("Statistic array:")
+	if len(alignment) == len(taxa_stats_list):
+		logging.info("\n" + "\n".join([alignment[index].id + "\t" + "\t".join(str(value) for value in taxa_stats_list[index]) for index in range(len(alignment))]))
 	np.savetxt(array_file, taxa_stats)
 	return(taxa_stats)
 
 def split_taxa(alignment, statistics_array, outgroup, threshold = 0, hist_file = None, breaks = 20):
 	PCA_results = alignment.get_pca(array = statistics_array)
-	logging.info("PCA values:\n%s" % "\n\t".join([str(round(PCA_results[0][x], 5))+": "+str(x) for x in PCA_results[0]]))
+	logging.info("PCA values:")
+	logging.info("\n%s" % "\n".join([str(x) + "\t" + str(round(PCA_results[0][x], 5)) for x in PCA_results[0]]))
 	logging.info("Proportion of variance explained by PCA %s" % PCA_results[1])
 	get_different = alignment.get_different(pca = PCA_results, cutoff = threshold) 
 	logging.debug('Two classes identified:')
@@ -56,8 +62,9 @@ def generate_alignments(alignment, directory, prob_taxa):
 			others_index.append([x.id for x in alignment].index(other_ones))
 		new_alignment = emsa([alignment[x] for x in range(len(alignment)) if x not in others_index])
 		namepath = os.getcwd()+'/'+directory+'/'+'iteration_'+str(count)
-		alignment_list.append(namepath+'.phy')
-		aln_handle = open(namepath+'.phy', "w")
+		new_alignment_path = namepath+'.temp.phy'
+		alignment_list.append(new_alignment_path)
+		aln_handle = open(new_alignment_path, "w")
 		AlignIO.write(new_alignment, aln_handle, "phylip-relaxed")
 		aln_handle.close()
 	return(alignment_list)
@@ -95,7 +102,26 @@ def tree_iterate(alignment_list, model, boots, directory, data_type):
 		raxml_output = glob.glob(directory+"/RAxML*")
 		for file in raxml_output:
 			os.remove(file)
- 
+
+def fasttree_iterate(alignment_list, directory):
+	count = 0
+	for aln in alignment_list:
+		count += 1
+		logging.debug('Begin FastTree run for alignment %s' % aln)
+		namestr = 'iteration_'+str(count)
+		fasttreecmd = _Fasttree.FastTreeCommandline(input = aln, out = directory+"/ft_"+str(count)+".tre")
+		logging.info("FastTree called as: %s" % fasttreecmd)
+		fasttreecmd()
+		logging.info("FastTree run finalized")
+	ft_trees = glob.glob(os.getcwd()+'/'+directory+"/ft_*")
+	with open(os.getcwd()+'/resulting_trees.tre', 'a+') as resulting_file:
+		for file in ft_trees:
+			with open(file, 'r') as curr_result:
+				resulting_file.write(curr_result.read())
+			logging.info("Appended tree(s) from %s into resulting tree file" % file)
+			os.remove(file)
+
+
 def consolidate_trees(treesfile, outgroup):
 	out_trees = []
 	with open(os.getcwd() + treesfile, 'r') as treefile:

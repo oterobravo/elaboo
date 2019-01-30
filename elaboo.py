@@ -1,7 +1,7 @@
 # ELABOORATE
 #Extract & Leave-All-But-One-Out Reconstruction.
 #Alejandro Otero Bravo
-#v0.2
+#v0.3
 #Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
 from iter_funcs import *
@@ -23,7 +23,7 @@ parser.add_argument("-s", "--taxa_stats_file", default = None, type=str, help = 
 parser.add_argument("-p", "--pca_threshold", type=int, default = 0, help = "Threshold for separating groups using the principal component")
 parser.add_argument("-m", "--model", type = str, default = None, help = "Sequence evolution model for tree building.\n(default GTRCAT for nucleotide, PROTCATDAYHOFF for protein)")
 parser.add_argument("-g", "--taxa_list", type = str, help = "Text file including the list of taxa to be analyzed separately.")
-parser.add_argument("-t", "--trees", type = str, default = None, help = "Newick file of trees to be used for consolidation.")
+parser.add_argument("-t", "--trees", type = str, default = 'resulting_trees.tre', help = "Newick file of trees to be used for consolidation.")
 parser.add_argument("-d", "--distribution", type = str, default = None, help = "Plot distribution of PCA values on given file.")
 parser.add_argument("-c", "--clean", type = bool, default = False, help = "File provided has no gaps nor ambiguities.")
 parser.add_argument("-y", "--algorithm", type = str, default = 'a', help = '''Which method to take.
@@ -33,12 +33,17 @@ parser.add_argument("-y", "--algorithm", type = str, default = 'a', help = '''Wh
 	d: Generate trees for each problem taxa.
 	e: Split and generate trees from a separate array.
 	f: Generate trees for my list of problem taxa.
-	g: Generate consensus tree from trees provided in file resulting_trees.tre''')
+	g: Generate consensus tree from trees provided in file resulting_trees.tre
+	h: Split taxa based on precalculated summary statistics
+	i: Build trees for a given set of taxa''')
+parser.add_argument("-e", "--tree_build", type = str, default = "fast", help = '''Method for tree building.
+	fast: FastTree
+	epa: RAxML EPA
+	rax: RAxML''')
 parser.add_argument("--kmer", type = int, default = 2, help = "Length of k-mer to use in sequence.")
 parser.add_argument("--histbreaks", type = int, default = 20, help = "Number of histogram breaks for the distribution file.")
 parser.add_argument("-l", "--log_file", type = str, default = 'treeiter.log', help = "File to save the log.")
 parser.add_argument("-w", "--log_level", type = int, default = 3, help = "logging level between 0 (none) and 3")
-parser.add_argument("-e", "--epa_algorithm", action = 'store_true', help = "Use RAxML-EPA for faster placement.")
 parser.add_argument("-k", "--keep_alignments", action = 'store_true', help = "Do not remove individual alignment files")
 args = parser.parse_args()
 
@@ -58,11 +63,10 @@ logging.basicConfig(filename = args.log_file, filemode = 'w', level = log_level,
 logging.info('Log started')
 logging.info('Elaboo called with parameters: %s' % " ".join(["\n\t"+x+": "+str(getattr(args, x)) for x in vars(args)]))
 
-#CALCULATE = False if (args.algorithm in "efg") else True
-#SPLIT = False if (args.algorithm in "bfg") else True
+
 CALCULATE = True if (args.algorithm in "abcd") else False
-SPLIT = True if (args.algorithm in "acde") else False
-TREE_BUILD = True if (args.algorithm in "adef") else False
+SPLIT = True if (args.algorithm in "acdeh") else False
+TREE_BUILD = True if (args.algorithm in "adefi") else False
 CONSOLIDATE = True if (args.algorithm in "aefg") else False
 
 logging.info("Algorithm selected: %s\n\tCalculate: %s\n\tSplit: %s\n\tTree Building: %s\n\tConsolidate: %s" % (args.algorithm, CALCULATE, SPLIT, TREE_BUILD, CONSOLIDATE))
@@ -126,12 +130,12 @@ if TREE_BUILD:
 			raise Exception("Taxa to be used have not been calculated nor provided. Switch mode or provide taxa_list.")
 		else:
 			logging.info("Taxa read from file %s" % args.taxa_list)
-	if args.epa_algorithm:
+	if args.tree_build == "epa":
 		CONSOLIDATE = False
 		tree_placement(alignment_prepared, problem_taxa, model = args.model, temporal_dir = temporal_dir, keep = args.keep_alignments)
 		logging.info("EPA Finalized.")
 		os.rmdir(temporal_dir)
-	else:
+	elif args.tree_build == "rax":
 		logging.info('Generating alignments leaving all but one taxa out.')
 		laboo_alignments = generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
 		logging.info('Iterating tree reconstruction using RAxML')
@@ -145,11 +149,28 @@ if TREE_BUILD:
 			for f in glob.glob(temporal_dir+"/*"):
 				os.rename(f, f.replace(temporal_dir+"/", "", 1))
 		os.rmdir(temporal_dir)
+	elif args.tree_build == "fast":
+		logging.info('Generating alignments leaving all but one taxa out.')
+		laboo_alignments = generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
+		logging.info('Iterating tree reconstruction using FastTree')
+		fasttree_iterate(laboo_alignments, temporal_dir)
+		logging.info("Tree reconstruction Finalized.")
+		if args.keep_alignments == False:
+			for f in glob.glob(temporal_dir+"/*"):
+				os.remove(f)
+			logging.info('Temporary alignments removed.')
+		else:
+			for f in glob.glob(temporal_dir+"/*"):
+				os.rename(f, f.replace(temporal_dir+"/", "", 1))
+		os.rmdir(temporal_dir)
+		##Troubleshoot this and remove redundancy
+	else:
+		raise Exception("Invalid Tree Building Method. Use 'rax', 'epa' or 'fast'.")
 	logging.info("TREE_BUILD finalized.")
 
 if CONSOLIDATE:
-	if args.trees is not None:
+	try:
 		final_tree = consolidate_trees('/'+args.trees, outgroup)
-	else:
-		final_tree = consolidate_trees('/resulting_trees.tre', outgroup)	
+	except IOError:
+		raise Exception('Problem opening file of trees for consolidation')
 	print(final_tree)
