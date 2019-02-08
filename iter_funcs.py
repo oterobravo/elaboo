@@ -1,6 +1,6 @@
 #Functions for the iteration of the algorithm
 #Alejandro Otero Bravo
-#v0.3
+#v0.4
 #Modules are defined here.
 
 #Disclaimer: The following is a preliminary version that has not been thoroughly tested.
@@ -69,56 +69,52 @@ def generate_alignments(alignment, directory, prob_taxa):
 		aln_handle.close()
 	return(alignment_list)
 
-def tree_iterate(alignment_list, model, boots, directory, data_type):
-	#Run tree iteration to create multiple trees. For each problematic taxon, create an alignment
-	#excluding all other problematic taxa and run RAxML.
-	count = 0
-	for aln in alignment_list:
-		count += 1
-		logging.debug('Begin RAxML run for alignment %s' % aln)
-		seed = random.randint(10000,99999)
-		namestr = 'iteration_'+str(count)
-		#Determine sequence data for default model
-		if model is None:
-			if data_type == "PROT":
-				evo_model = "PROTCATDAYHOFF"
-			else:
-				evo_model = "GTRCAT"
-		else:
-			evo_model = model		
-		raxml_obj = RaxmlCommandline(sequences = aln, model = evo_model, name=namestr, num_replicates = boots, working_dir = os.getcwd()+'/'+directory+'/', bootstrap_seed = seed)
-		logging.info("RAxML called as: %s" % raxml_obj)
-		raxml_obj()
-		logging.info("RAxML run finalized")
-		
-		#Save desired output and delete the rest
-		raxml_trees = glob.glob(os.getcwd()+'/'+directory+"/RAxML_bootstrap."+namestr+"*")
-		with open(os.getcwd()+'/resulting_trees.tre','a+') as resulting_file:
-			for file in raxml_trees:
-				with open(file, 'r') as curr_result:
-					resulting_file.write(curr_result.read())
-				logging.info('Appended tree(s) from %s into resulting tree file' % file)
-				os.remove(file)
-		raxml_output = glob.glob(directory+"/RAxML*")
-		for file in raxml_output:
-			os.remove(file)
 
-def fasttree_iterate(alignment_list, directory):
+def tree_iterate_all(alignment_list, directory, boots = 100, model = None, data_type = "PROT", method = "fast"):
+	#Run tree iteration to create multiple trees.
+	#Run a tree search for each alignment using the method specified
 	count = 0
+	namestr = 'iteration_'+str(count)
+	if (method == "rax" and model is None):
+		#logging.debug("Default model selected for RAxML")
+		if data_type == "PROT":
+			evo_model = "PROTCATDAYHOFF"
+			#logging.debug("Protein data: PROTCATDAYHOFF selected as model")
+		else:
+			evo_model = "GTRCAT"
+			#logging.debug("Nucleotide data: GTRCAT selected as model")
 	for aln in alignment_list:
 		count += 1
-		logging.debug('Begin FastTree run for alignment %s' % aln)
 		namestr = 'iteration_'+str(count)
-		fasttreecmd = _Fasttree.FastTreeCommandline(input = aln, out = directory+"/ft_"+str(count)+".tre")
-		logging.info("FastTree called as: %s" % fasttreecmd)
-		fasttreecmd()
-		logging.info("FastTree run finalized")
-	ft_trees = glob.glob(os.getcwd()+'/'+directory+"/ft_*")
-	with open(os.getcwd()+'/resulting_trees.tre', 'a+') as resulting_file:
-		for file in ft_trees:
+		logging.debug('Begin run for alignment %s' % aln)
+		if method == "fast":
+			fasttreecmd = _Fasttree.FastTreeCommandline(input = aln, out = directory+"/ft_"+str(count)+".tre")
+			logging.info("FastTree called as: %s" % fasttreecmd)
+			fasttreecmd()
+			logging.info("FastTree run finalized")
+		elif method == "rax":
+			seed = random.randint(10000,99999)
+			raxml_obj = RaxmlCommandline(sequences = aln, model = evo_model, name=namestr, num_replicates = boots, working_dir = os.getcwd()+'/'+directory+'/', bootstrap_seed = seed)
+			logging.info("RAxML called as: %s" % raxml_obj)
+			raxml_obj()
+			logging.info("RAxML run finalized")
+		else:
+			raise Exception("Incorrect method specified")
+	#Clean up
+	if method == "fast":
+		iterated_trees = glob.glob(os.getcwd()+'/'+directory+"/ft_*")
+	else:
+		iterated_trees = glob.glob(os.getcwd()+'/'+directory+"/RAxML_bootstrap."+namestr+"*")
+	with open(os.getcwd()+'/resulting_trees.tre','a+') as resulting_file:
+		for file in iterated_trees:
 			with open(file, 'r') as curr_result:
 				resulting_file.write(curr_result.read())
-			logging.info("Appended tree(s) from %s into resulting tree file" % file)
+			logging.info('Appended tree(s) from %s into resulting tree file' % file)
+			os.remove(file)
+	##Clean up RAxML files
+	if method == "rax":
+		raxml_output = glob.glob(directory+"/RAxML*")
+		for file in raxml_output:
 			os.remove(file)
 
 
@@ -176,7 +172,11 @@ def tree_placement(alignment, prob_taxa, model = None, reps = 5, keep = False, t
 	raxml_epa_obj = RaxmlCommandline(sequences = namepath+"clean.phy", model = evo_model, name="EPA.tre", working_dir = namepath, algorithm = 'v', starting_tree = namepath+"RAxML_bestTree.basetree")
 	logging.info("RAxML called as: %s" % raxml_epa_obj)
 	raxml_epa_obj()
-	for f in glob.glob(temporal_dir+"/RAxML_*EPA*"):
-		os.rename(f, f.replace(temporal_dir+'/', "", 1)) #Move files up.
+	logging.debug("RAxML run finalized")
+	for f in glob.glob(temporal_dir+"/*"):
+		if ("RAxML" in f):
+			os.rename(f, f.replace(temporal_dir+'/', "", 1)) #Move files up.
+		else:
+			os.remove(f)
 	os.rmdir(temporal_dir)
-	logging.info("RAxML run finalized")
+

@@ -4,14 +4,8 @@
 #v0.3
 #Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
-from iter_funcs import *
 import argparse
 from argparse import RawTextHelpFormatter
-import glob
-import os
-import random
-import string 
-import logging
 
 parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter)                                               
 
@@ -46,6 +40,14 @@ parser.add_argument("-l", "--log_file", type = str, default = 'treeiter.log', he
 parser.add_argument("-w", "--log_level", type = int, default = 3, help = "logging level between 0 (none) and 3")
 parser.add_argument("-k", "--keep_alignments", action = 'store_true', help = "Do not remove individual alignment files")
 args = parser.parse_args()
+
+
+import glob
+import os
+import random
+import string 
+import logging
+from iter_funcs import *
 
 if args.log_level == 3:
 	log_level = logging.DEBUG
@@ -134,26 +136,28 @@ if TREE_BUILD:
 		CONSOLIDATE = False
 		tree_placement(alignment_prepared, problem_taxa, model = args.model, temporal_dir = temporal_dir, keep = args.keep_alignments)
 		logging.info("EPA Finalized.")
-		os.rmdir(temporal_dir)
+		#os.rmdir(temporal_dir)
 	elif args.tree_build == "rax":
 		logging.info('Generating alignments leaving all but one taxa out.')
 		laboo_alignments = generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
 		logging.info('Iterating tree reconstruction using RAxML')
-		tree_iterate(laboo_alignments, model = args.model, boots = args.bootstraps, data_type = datatype, directory = temporal_dir)
+		tree_iterate_all(laboo_alignments, model = args.model, boots = args.bootstraps, data_type = datatype, directory = temporal_dir, method = "rax")
 		#Remove intermediate files, if desired
 		if args.keep_alignments == False:
 			for f in glob.glob(temporal_dir+"/*"):
 				os.remove(f)
+				logging.debug('Removed %s.' % f)
 			logging.info('Temporary alignments removed.')
 		else:
 			for f in glob.glob(temporal_dir+"/*"):
 				os.rename(f, f.replace(temporal_dir+"/", "", 1))
+				logging.debug("Saved %s." % f)
 		os.rmdir(temporal_dir)
 	elif args.tree_build == "fast":
 		logging.info('Generating alignments leaving all but one taxa out.')
 		laboo_alignments = generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
 		logging.info('Iterating tree reconstruction using FastTree')
-		fasttree_iterate(laboo_alignments, temporal_dir)
+		tree_iterate_all(laboo_alignments, temporal_dir, method = "fast")
 		logging.info("Tree reconstruction Finalized.")
 		if args.keep_alignments == False:
 			for f in glob.glob(temporal_dir+"/*"):
@@ -173,4 +177,5 @@ if CONSOLIDATE:
 		final_tree = consolidate_trees('/'+args.trees, outgroup)
 	except IOError:
 		raise Exception('Problem opening file of trees for consolidation')
+	logging.info("Final topology:\n %s" % final_tree)
 	print(final_tree)
