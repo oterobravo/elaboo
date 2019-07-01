@@ -15,7 +15,7 @@ import argparse
 import random
 import string 
 import logging
-import matplotlib.pyplot as hs
+#import matplotlib.pyplot as hs
 
 def elaboo_parser():
 	parser = argparse.ArgumentParser(formatter_class = argparse.RawTextHelpFormatter)                                               
@@ -67,6 +67,19 @@ def calculate(alignment, array_file, kmer_num, outgroup):
 	logging.info("CALCULATE finalized.")
 	return(taxa_stats)
 
+def draw_histogram(values, hist_file, threshold, breaks):
+	try: 
+		logging.getLogger('matplotlib').setLevel(logging.ERROR) #Disable matplotlib logging
+		import matplotlib.pyplot as hs
+	except ImportError:
+		logging.info("Error importing pyplot. Cannot draw histogram.")
+		return
+	logging.info("Saving histogram to file %s" % hist_file)
+	hs.hist(values, breaks)
+	hs.axvline(x = threshold, color = 'b')
+	hs.savefig(hist_file)
+	return
+	
 def split_taxa(alignment, statistics_array, outgroup, threshold = 0, hist_file = None, breaks = 20):
 	PCA_results = alignment.get_pca(array = statistics_array)
 	logging.info("PCA values:")
@@ -77,14 +90,9 @@ def split_taxa(alignment, statistics_array, outgroup, threshold = 0, hist_file =
 	logging.debug('First group (to be evaluated individually): %s' % get_different[0])
 	logging.debug('Second group (to be used as the base tree): %s' % get_different[1])
 	if hist_file is not None:
-		logging.info("Saving histogram to file %s" % hist_file)
-		logging.disable(logging.CRITICAL) ##TO STOP MATPLOTLIB LOGGING
-		hs.hist([PCA_results[0][x] for x in PCA_results[0]], breaks)
-		hs.axvline(x = threshold, color = 'b')
-		hs.savefig(hist_file)
-		logging.disable(logging.NOTSET) ##TO ENABLE LOGGING AGAIN
+		draw_histogram([PCA_results[0][x] for x in PCA_results[0]], hist_file, threshold, breaks)
 	if outgroup in get_different[0]:
-		raise Exception("Outgroup was identified as an outlier. It is recommended to use a sequence that is not as diverged.")
+		raise Exception("Outgroup %s was identified as an outlier. It is recommended to use a sequence that is not as diverged." % outgroup)
 	with open("problematic_taxa.txt","w") as problematic_taxa:
 		for taxon in get_different[0]:
 			problematic_taxa.write("%s\n" % taxon)
@@ -116,13 +124,13 @@ def tree_iterate_all(alignment_list, directory, boots = 100, model = None, data_
 	count = 0
 	namestr = 'iteration_'+str(count)
 	if (method == "rax" and model is None):
-		#logging.debug("Default model selected for RAxML")
+		logging.debug("Default model selected for RAxML")
 		if data_type == "PROT":
-			evo_model = "PROTCATDAYHOFF"
-			#logging.debug("Protein data: PROTCATDAYHOFF selected as model")
+			model = "PROTCATDAYHOFF"
+			logging.debug("Protein data: PROTCATDAYHOFF selected as model")
 		else:
-			evo_model = "GTRCAT"
-			#logging.debug("Nucleotide data: GTRCAT selected as model")
+			model = "GTRCAT"
+			logging.debug("Nucleotide data: GTRCAT selected as model")
 	for aln in alignment_list:
 		count += 1
 		namestr = 'iteration_'+str(count)
@@ -134,28 +142,28 @@ def tree_iterate_all(alignment_list, directory, boots = 100, model = None, data_
 			logging.info("FastTree run finalized")
 		elif method == "rax":
 			seed = random.randint(10000,99999)
-			raxml_obj = RaxmlCommandline(sequences = aln, model = evo_model, name=namestr, num_replicates = boots, working_dir = os.getcwd()+'/'+directory+'/', bootstrap_seed = seed)
+			raxml_obj = RaxmlCommandline(sequences = aln, model = model, name=namestr, num_replicates = boots, working_dir = os.getcwd()+'/'+directory+'/', bootstrap_seed = seed)
 			logging.info("RAxML called as: %s" % raxml_obj)
 			raxml_obj()
 			logging.info("RAxML run finalized")
 		else:
 			raise Exception("Incorrect method specified")
-	#Clean up
-	if method == "fast":
-		iterated_trees = glob.glob(os.getcwd()+'/'+directory+"/ft_*")
-	else:
-		iterated_trees = glob.glob(os.getcwd()+'/'+directory+"/RAxML_bootstrap."+namestr+"*")
-	with open(os.getcwd()+'/resulting_trees.tre','a+') as resulting_file:
-		for file in iterated_trees:
-			with open(file, 'r') as curr_result:
-				resulting_file.write(curr_result.read())
-			logging.info('Appended tree(s) from %s into resulting tree file' % file)
-			os.remove(file)
-	##Clean up RAxML files
-	if method == "rax":
-		raxml_output = glob.glob(directory+"/RAxML*")
-		for file in raxml_output:
-			os.remove(file)
+		#Clean up
+		if method == "fast":
+			iterated_trees = glob.glob(os.getcwd()+'/'+directory+"/ft_*")
+		else:
+			iterated_trees = glob.glob(os.getcwd()+'/'+directory+"/RAxML_bootstrap."+namestr+"*")
+		with open(os.getcwd()+'/resulting_trees.tre','a+') as resulting_file:
+			for file in iterated_trees:
+				with open(file, 'r') as curr_result:
+					resulting_file.write(curr_result.read())
+				logging.info('Appended tree(s) from %s into resulting tree file' % file)
+				os.remove(file)
+		##Clean up RAxML files
+		if method == "rax":
+			raxml_output = glob.glob(directory+"/RAxML*")
+			for file in raxml_output:
+				os.remove(file)
 
 
 def consolidate_trees(treesfile, outgroup):
