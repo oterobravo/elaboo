@@ -1,17 +1,13 @@
 #Treefuns
 #Functions for working with trees
+#Alejandro Otero Bravo
+#v0.2
 #includes the majority rule plus consensus algorithm
 ##from Jansson, et al., 2013. https://arxiv.org/pdf/1307.7821.pdf
-#Alejandro Otero Bravo
-#v0.1 
 #Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
-from Bio import Phylo
-from Bio.Phylo.Consensus import *
-from io import StringIO
 from ete3 import Tree
 from collections import Counter
-
 
 def copy_tree_list(treelist):
 	'''copies a list of Tree objects from ete3

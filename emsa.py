@@ -6,15 +6,15 @@
 #The main point will be to separate taxa that are likely affected by LBA.
 #Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
-from Bio import Phylo
+
+import logging
+import numpy as np
 from Bio import Align
 from Bio import AlignIO
 from Bio.Phylo.TreeConstruction import DistanceCalculator as distcalc
 from collections import Counter
 from copy import copy
-import numpy as np
 from sklearn.decomposition import PCA
-import logging
 
 class emsa(Align.MultipleSeqAlignment):
 	'''Modification of the class MultipleSeqAlignment to include a separate alphabet
@@ -26,7 +26,6 @@ class emsa(Align.MultipleSeqAlignment):
 		#Determine the alphabet of the alignment
 		nucl = set("ATCGUN-")
 		dna = set("ATCG")
-		rna = set("AUCG")
 		prot = set("ABCDEFGHIKLMNPQRSTVWYZX-")
 		self.ambig = False
 		self.gapped = False

@@ -2,7 +2,7 @@
 #ELABOORATE
 #Extract & Leave-All-But-One-Out Reconstruction.
 #Alejandro Otero Bravo
-#v0.4
+#v0.5
 #Disclaimer: The following is a preliminary version that has not been thoroughly tested.
 
 import glob
@@ -10,7 +10,45 @@ import os
 import random
 import string 
 import logging
-from iter_funcs import *
+import argparse
+import iter_funcs as ifs
+from Bio import AlignIO
+from emsa import emsa
+
+def elaboo_parser():
+	parser = argparse.ArgumentParser(formatter_class = argparse.RawTextHelpFormatter)                                               
+	parser.add_argument("-a", "--alignment", type = str, required = True, help = "Input alignment")
+	parser.add_argument("-f", "--input_format", type = str, default = "fasta", help = "Input alignment format, default: fasta")
+	parser.add_argument("-b", "--bootstraps", type = int, default = 10, help = "Number of bootstrap replicates per taxon in question")
+	parser.add_argument("-o", "--outgroup", type = str, help = "Outgroup from the alignment")
+	parser.add_argument("-s", "--taxa_stats_file", default = None, type=str, help = "File including values for PCA\n(must conform to numpy array standards).")
+	parser.add_argument("-p", "--pca_threshold", type=int, default = 0, help = "Threshold for separating groups using the principal component")
+	parser.add_argument("-m", "--model", type = str, default = None, help = "Sequence evolution model for tree building.\n(default GTRCAT for nucleotide, PROTCATDAYHOFF for protein)")
+	parser.add_argument("-g", "--taxa_list", type = str, help = "Text file including the list of taxa to be analyzed separately.")
+	parser.add_argument("-t", "--trees", type = str, default = 'resulting_trees.tre', help = "Newick file of trees to be used for consolidation.")
+	parser.add_argument("-d", "--distribution", type = str, default = None, help = "Plot distribution of PCA values on given file.")
+	parser.add_argument("-c", "--clean", type = bool, default = False, help = "File provided has no gaps nor ambiguities.")
+	parser.add_argument("-y", "--algorithm", type = str, default = 'a', help = '''Which method to take.
+		a: (default) do all from just alignment.
+		b: Only calculate statistics for the alignment.
+		c: List potentially problematic taxa from alignment statistics.
+		d: Generate trees for each problem taxa.
+		e: Split and generate trees from a separate array.
+		f: Generate trees for my list of problem taxa.
+		g: Generate consensus tree from trees provided in file resulting_trees.tre
+		h: Split taxa based on precalculated summary statistics
+		i: Build trees for a given set of taxa''')
+	parser.add_argument("-e", "--tree_build", type = str, default = "fast", help = '''Method for tree building.
+		fast: FastTree
+		epa: RAxML EPA
+		rax: RAxML''')
+	parser.add_argument("--kmer", type = int, default = 2, help = "Length of k-mer to use in sequence.")
+	parser.add_argument("--histbreaks", type = int, default = 20, help = "Number of histogram breaks for the distribution file.")
+	parser.add_argument("-l", "--log_file", type = str, default = 'elaboo.log', help = "File to save the log.")
+	parser.add_argument("-w", "--log_level", type = int, default = 3, help = "logging level between 0 (none) and 3")
+	parser.add_argument("-k", "--keep_alignments", action = 'store_true', help = "Do not remove individual alignment files")
+	parsed_args = parser.parse_args()
+	return(parsed_args)
 
 def start_logging(args):
 	if args.log_level == 3:
@@ -23,8 +61,6 @@ def start_logging(args):
 		log_level = logging.CRITICAL
 	else:
 		raise ValueError("log level (-w) is invalid.")
-
-
 	logging.getLogger(__name__)
 	logging.basicConfig(filename = args.log_file, filemode = 'w', level = log_level, format = '%(asctime)s - %(funcName)s - %(message)s', datefmt='%I:%M:%S')
 	logging.info('Log started')
@@ -40,7 +76,6 @@ def main(args):
 
 	logging.info("Algorithm selected: %s\n\tCalculate: %s\n\tSplit: %s\n\tTree Building: %s\n\tConsolidate: %s" % (args.algorithm, CALCULATE, SPLIT, TREE_BUILD, CONSOLIDATE))
 	##
-
 	#Always require alignment
 	input_alignment = AlignIO.read(open(args.alignment), args.input_format)
 	logging.info("input file %s successfully read" % args.alignment)
@@ -67,7 +102,7 @@ def main(args):
 
 
 	if (CALCULATE & (args.taxa_stats_file is None)):
-		taxa_stats = calculate(alignment_prepared, array_file = "alignment_stats.txt", kmer_num = args.kmer, outgroup = alignment_prepared.is_named(outgroup))
+		taxa_stats = ifs.calculate(alignment_prepared, array_file = "alignment_stats.txt", kmer_num = args.kmer, outgroup = alignment_prepared.is_named(outgroup))
 
 	if SPLIT:
 		logging.info("Begin SPLIT")
@@ -77,7 +112,7 @@ def main(args):
 				taxa_stats = np.genfromtxt(args.taxa_stats_file)
 			except:
 				raise Exception("Statistics for each taxon were not calculated and no file was given. Add a file using -s or set CALCULATE to True.")
-		problem_taxa, PCA_results = split_taxa(alignment_prepared, taxa_stats, outgroup, threshold = args.pca_threshold, hist_file = args.distribution, breaks = args.histbreaks )
+		problem_taxa, PCA_results = ifs.split_taxa(alignment_prepared, taxa_stats, outgroup, threshold = args.pca_threshold, hist_file = args.distribution, breaks = args.histbreaks )
 		logging.info("SPLIT finalized.")
 
 	if TREE_BUILD:
@@ -99,14 +134,14 @@ def main(args):
 				logging.info("Taxa read from file %s" % args.taxa_list)
 		if args.tree_build == "epa":
 			CONSOLIDATE = False
-			tree_placement(alignment_prepared, problem_taxa, model = args.model, temporal_dir = temporal_dir, keep = args.keep_alignments)
+			ifs.tree_placement(alignment_prepared, problem_taxa, model = args.model, temporal_dir = temporal_dir, keep = args.keep_alignments)
 			logging.info("EPA Finalized.")
 			#os.rmdir(temporal_dir)
 		elif args.tree_build == "rax":
 			logging.info('Generating alignments leaving all but one taxa out.')
-			laboo_alignments = generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
+			laboo_alignments = ifs.generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
 			logging.info('Iterating tree reconstruction using RAxML')
-			tree_iterate_all(laboo_alignments, model = args.model, boots = args.bootstraps, data_type = datatype, directory = temporal_dir, method = "rax")
+			ifs.tree_iterate_all(laboo_alignments, model = args.model, boots = args.bootstraps, data_type = datatype, directory = temporal_dir, method = "rax")
 			#Remove intermediate files, if desired
 			if args.keep_alignments == False:
 				for f in glob.glob(temporal_dir+"/*"):
@@ -120,9 +155,9 @@ def main(args):
 			os.rmdir(temporal_dir)
 		elif args.tree_build == "fast":
 			logging.info('Generating alignments leaving all but one taxa out.')
-			laboo_alignments = generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
+			laboo_alignments = ifs.generate_alignments(alignment_prepared, temporal_dir, prob_taxa = problem_taxa)
 			logging.info('Iterating tree reconstruction using FastTree')
-			tree_iterate_all(laboo_alignments, temporal_dir, method = "fast")
+			ifs.tree_iterate_all(laboo_alignments, temporal_dir, method = "fast")
 			logging.info("Tree reconstruction Finalized.")
 			if args.keep_alignments == False:
 				for f in glob.glob(temporal_dir+"/*"):
@@ -139,7 +174,7 @@ def main(args):
 
 	if CONSOLIDATE:
 		try:
-			final_tree = consolidate_trees('/'+args.trees, outgroup)
+			final_tree = ifs.consolidate_trees('/'+args.trees, outgroup)
 		except IOError:
 			raise Exception('Problem opening file of trees for consolidation')
 		logging.info("Final topology:\n %s" % final_tree)
