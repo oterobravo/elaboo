@@ -6,30 +6,14 @@ For taxa with high mutation rates, LBA (long branch attraction) artifacts can ge
 ## Getting Started
 
 ### Requirements  
-ELABOORATE requires python 3+ and the following extra packages (maybe less):
-
-```  
-biopython==1.70
-cycler==0.10.0
-ete3==3.1.1
-kiwisolver==1.0.1
-matplotlib==2.2.2
-numpy==1.14.1
-p4===1.2.0.-2016-05-03-
-pyparsing==2.2.0
-python-dateutil==2.7.2
-pytz==2018.4
-scikit-learn==0.19.1
-scipy==1.0.1
-six==1.11.0
-sklearn==0.0
-```  
-Additionally, the scripts emsa.py, treefuns.py and iter_funcs.py must be in the same folder or in the library path. 
-
+ELABOORATE requires python 3+ and the packages listed in the requirements.txt file.  
+```
+pip install -r requirements
+```
 
 ## Quick Start
 
-For simplicity, you can use a virtual environment.
+For simplicity, you can use a virtual environment. If using `venv`:
 ```
 python3 -m venv elaboo
 cd elaboo/
@@ -37,16 +21,40 @@ source bin/activate
 pip install -r requirements.txt
 ```
 
-The easiest way to run Elaboorate is to use all default parameters. Simply attach an alignment and indicate an outgroup.
+(Also for simplicity,do `alias elaboo='/path/to/elaboo.py'`. )
 
+The minimal requirements for elaboorate are an alignment and the name of the outgroup to use. This will run the full pipeline with the default parameters.  
 ```
-python elaboorate.py -s alignment.fas -o outgroup_name
+python elaboo.py -s alignment.fas -o outgroup_name
 ```
+For a complete list of options and the default parameters use the help option `-h`.
 
-For a complete list of options use the help option `-h`.
+To run individual modules, see the Algorithms section below.
 
 ## Modules
 Elaboo contains 4 modules that perform the different steps of the process. They can be used together or separately to evaluate intermediate steps of the process or to use external files to proceed. 
+It's recommended to run each step individually with a new dataset to see what's happening and ensure the taxa selected by SPLIT make sense. Check `elaboo.log` in between runs.
+```
+elaboo -s alignment.fas -o outgroup_name -y b 
+```
+Creates `elaboo_alignment_stats.txt`.
+
+```
+elaboo -s alignment.fas -o outgroup_name -y h -s elaboo_alignment_stats.txt 
+```
+Generates principal component and splits taxa, list on `elaboo_problematic_taxa.txt`.
+Recommended: `-d histogram.png` to view the distribution of parameters and cutoff (requires matplotlib).
+
+```
+elaboo -s alignment.fas -o outgroup_name -y i -g elaboo_problematic_taxa.txt -fast 
+```
+Iterate tree reconstruction. Produce all the trees and save in `elaboo_resulting_trees.txt`.
+
+```
+elaboo -s alignment.fas -o outgroup_name -y g -t elaboo_resulting_trees.txt 
+```
+Creates consensus tree from resulting trees.
+
 
 The four modules are:
 

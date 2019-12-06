@@ -1,10 +1,7 @@
 #Elaboorate MultipleSequence Alignment
 #Alejandro Otero Bravo
-#v0.1
-#Separates taxa in an alignment based on multiple alignment metrics
-#Including distance from an outgroup, base composition, and kmer frequency.
-#The main point will be to separate taxa that are likely affected by LBA.
-#Disclaimer: The following is a preliminary version that has not been thoroughly tested.
+#v0.5
+#Multiple Sequence Alignment class for Elaboorate
 
 
 import logging
@@ -16,11 +13,12 @@ from collections import Counter
 from copy import copy
 from sklearn.decomposition import PCA
 
-class emsa(Align.MultipleSeqAlignment):
+class Emsa(Align.MultipleSeqAlignment):
 	'''Modification of the class MultipleSeqAlignment to include a separate alphabet
 	determination and several functions.'''
 	def __init__(self, records):
 		super().__init__(records)
+		self.Alphabet()
 		
 	def Alphabet(self):
 		#Determine the alphabet of the alignment
@@ -216,6 +214,21 @@ class emsa(Align.MultipleSeqAlignment):
 			else:
 				group2.append(key)
 		return([group1, group2])
+
+def read_alignment(align_file, align_format, clean = False):
+	with open(align_file, "r") as af:
+		input_alignment = AlignIO.read(af, align_format)
+	logging.info("input file %s successfully read" % align_file)
+	logging.info("Taxa: %i, length: %i" % (len(input_alignment), len(input_alignment[0])))
+
+	alignment_prepared = Emsa(input_alignment._records)
+	alignment_prepared.Alphabet()
+	if clean:
+		alignment_prepared = alignment_prepared.clean()
+		logging.debug('Alignment transformed and ambiguities have been stripped.')
+
+	logging.info("Taxa: %i, length: %i" % (len(alignment_prepared), len(alignment_prepared[0])))
+	return(alignment_prepared)
 		
 
 
